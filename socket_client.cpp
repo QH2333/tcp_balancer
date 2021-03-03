@@ -11,13 +11,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-constexpr auto MAX_CONCURRENCY = 5;
+constexpr auto MAX_CONCURRENCY = 60;
 
 sockaddr_in get_inet_addr(uint32_t host, uint16_t port);
 std::string format_inet_addr(uint32_t host, uint16_t port);
 void cleanup(int);
-void* tcp_client_thread(void* arg);
-inline int find_next_available(bool* tcp_conn_bitmap);
+void *tcp_client_thread(void *arg);
+inline int find_next_available(bool *tcp_conn_bitmap);
 
 struct tcp_client_arg
 {
@@ -79,9 +79,9 @@ void cleanup(int)
     exit(0);
 }
 
-void* tcp_client_thread(void* arg)
+void *tcp_client_thread(void *arg)
 {
-    int thread_id = ((tcp_client_arg*)arg)->thread_id;
+    int thread_id = ((tcp_client_arg *)arg)->thread_id;
     // Create socket
     int tcp_client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (tcp_client_fd == -1)
@@ -93,12 +93,12 @@ void* tcp_client_thread(void* arg)
     sockaddr_in serv_addr = get_inet_addr(0x51445E12, 2333);
     std::string tcp_server_addr_s = format_inet_addr(ntohl(serv_addr.sin_addr.s_addr), ntohs(serv_addr.sin_port));
 
-    if (connect(tcp_client_fd, (sockaddr*)&serv_addr, sizeof(serv_addr)) == -1)
+    if (connect(tcp_client_fd, (sockaddr *)&serv_addr, sizeof(serv_addr)) == -1)
     {
         std::cerr << "Error: Failed to establish connection with " << tcp_server_addr_s << "!" << std::endl;
         std::cerr << strerror(errno) << std::endl;
     }
-    
+
     char msg[1024];
     sprintf(msg, "Hello from thread %d\n", thread_id);
     send(tcp_client_fd, msg, strlen(msg), 0);
@@ -106,4 +106,3 @@ void* tcp_client_thread(void* arg)
 
     return nullptr;
 }
-
