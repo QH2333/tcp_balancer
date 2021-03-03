@@ -8,23 +8,10 @@
  * @copyright Copyright (c) 2021
  * 
  */
-#include <iostream>
-#include <sstream>
-#include <cstdlib>
-#include <cstring>
-#include <cstdio>
-
-#include <unistd.h>
-#include <signal.h>
-#include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include "common.h"
 
 constexpr auto MAX_CONCURRENCY = 10;
 
-sockaddr_in get_inet_addr(uint32_t host, uint16_t port);
-std::string format_inet_addr(uint32_t host, uint16_t port);
 void cleanup(int);
 void *tcp_holder_thread(void *arg);
 inline int find_next_available(bool *tcp_conn_bitmap);
@@ -108,38 +95,6 @@ int main()
     return 0;
 }
 
-/**
- * @brief 
- * 
- */
-// Returns a sockaddr_in struct representing host:port, parameters are in host order
-sockaddr_in get_inet_addr(uint32_t host, uint16_t port)
-{
-    sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(host);
-    addr.sin_port = htons(port);
-    return addr;
-}
-
-// Returns a string in the format of A.B.C.D:port
-std::string format_inet_addr(uint32_t host, uint16_t port)
-{
-    std::string result;
-    std::stringstream sstream;
-    sstream << ((host & 0xFF000000) >> 24);
-    sstream << ".";
-    sstream << ((host & 0x00FF0000) >> 16);
-    sstream << ".";
-    sstream << ((host & 0x0000FF00) >> 8);
-    sstream << ".";
-    sstream << (host & 0x000000FF);
-    sstream << ":";
-    sstream << port;
-    sstream >> result;
-    return result;
-}
 
 void cleanup(int)
 {
