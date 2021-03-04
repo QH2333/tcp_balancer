@@ -1,3 +1,13 @@
+/**
+ * @file common.cpp
+ * @author Qian Hao (qh2333@my.swjtu.edu.cn)
+ * @brief 
+ * @version 0.1
+ * @date 2021-03-04
+ * 
+ * @copyright Copyright (c) 2021
+ * 
+ */
 #include "common.h"
 
 /**
@@ -39,4 +49,11 @@ std::string format_inet_addr(uint32_t host, uint16_t port)
     sstream << port;
     sstream >> result;
     return result;
+}
+
+void sync_op(pthread_mutex_t *mutex, void(op)(void))
+{
+    pthread_mutex_lock(mutex);
+    op();
+    pthread_mutex_unlock(mutex);
 }
