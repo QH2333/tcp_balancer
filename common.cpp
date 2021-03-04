@@ -36,7 +36,6 @@ sockaddr_in get_inet_addr(uint32_t host, uint16_t port)
  */
 std::string format_inet_addr(uint32_t host, uint16_t port)
 {
-    std::string result;
     std::stringstream sstream;
     sstream << ((host & 0xFF000000) >> 24);
     sstream << ".";
@@ -47,8 +46,21 @@ std::string format_inet_addr(uint32_t host, uint16_t port)
     sstream << (host & 0x000000FF);
     sstream << ":";
     sstream << port;
-    sstream >> result;
-    return result;
+    return sstream.str();
+}
+
+std::string format_tcp_tuple(tcp_tuple_info_t data, uint8_t which)
+{
+    std::stringstream sstream;
+    if (which & SERVER_SERVER) sstream << format_inet_addr(data.s_server_ip, data.s_server_port);
+    if ((which & SERVER_SERVER) && (which & SERVER_CLIENT)) sstream << " <-> ";
+    if (which & SERVER_CLIENT) sstream << format_inet_addr(data.s_client_ip, data.s_client_port);
+
+    if (which & CLIENT_SERVER) sstream << format_inet_addr(data.c_server_ip, data.c_server_port);
+    if ((which & CLIENT_SERVER) && (which & CLIENT_CLIENT)) sstream << " <-> ";
+    if (which & CLIENT_CLIENT) sstream << format_inet_addr(data.c_client_ip, data.c_client_port);
+
+    return sstream.str();
 }
 
 void sync_op(pthread_mutex_t *mutex, void(op)(void))

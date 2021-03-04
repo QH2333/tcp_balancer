@@ -20,7 +20,7 @@ inline int find_next_available(bool *tcp_conn_bitmap);
 
 int tcp_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 bool tcp_listen_started = false;
-std::unordered_map<std::string, int> ip_log;
+std::unordered_map<uint32_t, int> ip_log;
 static pthread_mutex_t output_mutex;
 
 int main()
@@ -30,7 +30,7 @@ int main()
     int tcp_conn_fd_list[MAX_CONCURRENCY];
     bool tcp_conn_bitmap[MAX_CONCURRENCY];
     std::for_each(tcp_conn_bitmap, tcp_conn_bitmap + MAX_CONCURRENCY, [](bool &item) -> void { item = false; });
-    tcp_peer_info tcp_peer_list[MAX_CONCURRENCY];
+    tcp_status_t tcp_status_list[MAX_CONCURRENCY];
     pthread_t thread_id[MAX_CONCURRENCY];
     tcp_handler_arg thread_arguments_list[MAX_CONCURRENCY];
 
@@ -39,9 +39,11 @@ int main()
         int id = -1;
         while (id == -1)
             id = find_next_available(tcp_conn_bitmap);
-        
-        tcp_peer_list[id].tcp_peer_len = sizeof(sockaddr_in);
-        tcp_conn_fd_list[id] = accept(tcp_listen_fd, (sockaddr *)&(tcp_peer_list[id].tcp_peer_addr), &tcp_peer_list[id].tcp_peer_len);
+
+        uint32_t tcp_peer_len = sizeof(sockaddr_in);
+        sockaddr_in tcp_peer_addr;
+        tcp_conn_fd_list[id] = accept(tcp_listen_fd, (sockaddr *)&tcp_peer_addr, &tcp_peer_len);
+
         if (tcp_conn_fd_list[id] == -1)
         {
             pthread_mutex_lock(&output_mutex);
@@ -51,23 +53,24 @@ int main()
         else
         {
             tcp_conn_bitmap[id] = true;
-            tcp_peer_list[id].tcp_peer_addr_s = format_inet_addr(
-                ntohl(tcp_peer_list[id].tcp_peer_addr.sin_addr.s_addr),
-                ntohs(tcp_peer_list[id].tcp_peer_addr.sin_port));
+
+            tcp_status_list[id].tcp_tuple_info.s_server_ip = 0x7F000001;
+            tcp_status_list[id].tcp_tuple_info.s_server_port = TCP_PORT;
+            tcp_status_list[id].tcp_tuple_info.s_client_ip = ntohl(tcp_peer_addr.sin_addr.s_addr);
+            tcp_status_list[id].tcp_tuple_info.s_client_port = ntohs(tcp_peer_addr.sin_port);
 
             pthread_mutex_lock(&output_mutex);
-            std::cout << "[" << id << "] Got connection from [" << tcp_peer_list[id].tcp_peer_addr_s << "]" << std::endl;
+            std::cout << "[" << id << "] Got connection [" << format_tcp_tuple(tcp_status_list[id].tcp_tuple_info, SERVER_ALL) << "]" << std::endl;
             pthread_mutex_unlock(&output_mutex);
 
-            thread_arguments_list[id] = (tcp_handler_arg){id, tcp_conn_fd_list[id], tcp_peer_list[id].tcp_peer_addr_s, tcp_conn_bitmap + id};
+            thread_arguments_list[id] = (tcp_handler_arg){id, tcp_conn_fd_list[id], tcp_status_list+id, tcp_conn_bitmap + id};
             pthread_create(&thread_id[id], nullptr, tcp_handler_thread, &thread_arguments_list[id]);
 
-            std::string ip_log_key = format_inet_addr(ntohl(tcp_peer_list[id].tcp_peer_addr.sin_addr.s_addr), 0);
-            if (ip_log.find(ip_log_key) == ip_log.end())
+            if (ip_log.find(tcp_status_list[id].tcp_tuple_info.s_client_ip) == ip_log.end())
             {
-                ip_log.insert({ip_log_key, 1});
+                ip_log.insert({tcp_status_list[id].tcp_tuple_info.s_client_ip, 1});
                 pthread_mutex_lock(&output_mutex);
-                std::cout << "[Info] New IP: " << ip_log_key << std::endl;
+                std::cout << "[Info] New IP: " << tcp_status_list[id].tcp_tuple_info.s_client_ip << std::endl;
                 pthread_mutex_unlock(&output_mutex);
             }
         }
@@ -114,21 +117,11 @@ void prepare()
     }
 }
 
-void cleanup(int) // There must be an int parameter, magic
-{
-    if (tcp_listen_started)
-    {
-        close(tcp_listen_fd);
-        std::cout << "\nStopped listening." << std::endl;
-    }
-    exit(0);
-}
-
 void *tcp_handler_thread(void *arg)
 {
     int tcp_conn_id = ((tcp_handler_arg *)arg)->tcp_conn_id;
     int tcp_conn_fd = ((tcp_handler_arg *)arg)->tcp_conn_fd;
-    std::string tcp_peer_addr_s = ((tcp_handler_arg *)arg)->tcp_peer_addr_s;
+    tcp_status_t *tcp_status = ((tcp_handler_arg *)arg)->tcp_status;
     bool *tcp_conn_flag = ((tcp_handler_arg *)arg)->tcp_conn_flag;
 
     char buff[1024] = {};
@@ -136,13 +129,13 @@ void *tcp_handler_thread(void *arg)
     buff[msg_len] = '\0';
 
     pthread_mutex_lock(&output_mutex);
-    std::cout << "[" << tcp_conn_id << "] Recv msg from [" << tcp_peer_addr_s << "]: " << buff;
+    std::cout << "[" << tcp_conn_id << "] Recv msg from [" << format_tcp_tuple(tcp_status->tcp_tuple_info, SERVER_CLIENT) << "]: " << buff;
     pthread_mutex_unlock(&output_mutex);
 
     close(tcp_conn_fd);
     *tcp_conn_flag = false;
     pthread_mutex_lock(&output_mutex);
-    std::cout << "[" << tcp_conn_id << "] Disconncet [" << tcp_peer_addr_s << "]" << std::endl;
+    std::cout << "[" << tcp_conn_id << "] Disconncet [" << format_tcp_tuple(tcp_status->tcp_tuple_info, SERVER_CLIENT) << "]" << std::endl;
     pthread_mutex_unlock(&output_mutex);
 
     return nullptr;
@@ -156,4 +149,14 @@ inline int find_next_available(bool *tcp_conn_bitmap)
             return i;
     }
     return -1;
+}
+
+void cleanup(int) // There must be an int parameter, magic
+{
+    if (tcp_listen_started)
+    {
+        close(tcp_listen_fd);
+        std::cout << "\nStopped listening." << std::endl;
+    }
+    exit(0);
 }
