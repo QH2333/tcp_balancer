@@ -60,16 +60,28 @@ typedef struct tcp_handler_arg
     bool *tcp_conn_flag;
 }tcp_handler_arg;
 
+struct tcp_client_arg
+{
+    int thread_id;
+    int tcp_client_fd;
+    tcp_status_t *tcp_status;
+};
+
 typedef struct protocol_t
 {
-    uint16_t type;
-    uint16_t version;
-    uint32_t length; // Body length in byte
+    uint8_t type;
+    uint8_t version;
+    uint16_t length; // Body length in byte
     void *body;
 } protocol_t;
 
 
-sockaddr_in get_inet_addr(uint32_t host, uint16_t port);
-std::string format_inet_addr(uint32_t host, uint16_t port);
+sockaddr_in get_ip_addr(uint32_t host, uint16_t port);
+std::string format_ip_addr(uint32_t host);
+std::string format_ip_port(uint32_t host, uint16_t port);
 std::string format_tcp_tuple(tcp_tuple_info_t data, uint8_t which = 0xFF);
 void sync_op(pthread_mutex_t *mutex, void(op)(void));
+
+int read_packet(int tcp_conn_fd, tcp_status_t *tcp_status, const bool is_server = true);
+int send_type2_method1(int tcp_conn_fd); // Request
+int send_type2_method2(int tcp_conn_fd, tcp_status_t *tcp_status, const bool is_server = true); // Reply
