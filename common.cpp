@@ -10,6 +10,7 @@
  */
 #include "common.h"
 
+
 /**
  * @brief Returns a sockaddr_in struct representing host:port
  * 
@@ -27,6 +28,12 @@ sockaddr_in get_ip_addr(uint32_t host, uint16_t port)
     return addr;
 }
 
+/**
+ * @brief Format an IPv4 address in the format of A.B.C.D
+ * 
+ * @param host 32bit IPv4 address in host order
+ * @return std::string 
+ */
 std::string format_ip_addr(uint32_t host)
 {
     std::stringstream sstream;
@@ -56,6 +63,19 @@ std::string format_ip_port(uint32_t host, uint16_t port)
     return sstream.str();
 }
 
+/**
+ * @brief Format a tcp_tuple_info_t with options
+ * 
+ * @param data tcp_tuple_info_t structure
+ * @param which Format options, which can be one of the following marcos:
+ *     SERVER_ALL      A.B.C.D:port1 <-> E.F.G.H:port2
+ *     SERVER_SERVER   A.B.C.D:port1
+ *     SERVER_CLIENT   E.F.G.H:port2
+ *     CLIENT_ALL      I.J.K.L:port3 <-> M.N.O.P:port4
+ *     CLIENT_SERVER   I.J.K.L:port3
+ *     CLIENT_CLIENT   M.N.O.P:port4
+ * @return std::string 
+ */
 std::string format_tcp_tuple(tcp_tuple_info_t data, uint8_t which)
 {
     std::stringstream sstream;
@@ -70,28 +90,28 @@ std::string format_tcp_tuple(tcp_tuple_info_t data, uint8_t which)
     return sstream.str();
 }
 
-void sync_op(pthread_mutex_t *mutex, void(op)(void))
-{
-    pthread_mutex_lock(mutex);
-    op();
-    pthread_mutex_unlock(mutex);
-}
-
-
+/**
+ * @brief 
+ * 
+ * @param tcp_conn_fd 
+ * @param tcp_status 
+ * @param is_server 
+ * @return int 
+ */
 int read_packet(int tcp_conn_fd, tcp_status_t *tcp_status, const bool is_server)
 {
     protocol_t packet_info;
 
-    int state = 0;
-    int ret_value = -1;
+    int state = RS_PREPARE;
+    int ret_value = OP_CLOSE;
     char recv_buff[1024] = {};
     int msg_len;
 
-    while (state != -1)
+    while (state != RS_END)
     {
         switch (state) 
         {
-        case 0: // Read common header
+        case RS_PREPARE: // Read common header
             msg_len = recv(tcp_conn_fd, recv_buff, 4, 0);
             if (msg_len > 0)
             {
@@ -101,17 +121,17 @@ int read_packet(int tcp_conn_fd, tcp_status_t *tcp_status, const bool is_server)
             }
             state = packet_info.type;
             break;
-        case 1: // Register service
-            state = -1;
+        case RS_REG_SERV: // Register service
+            state = RS_END;
             break;
-        case 2: // Negotiate peer infomation
+        case RS_NEG_PEER: // Negotiate peer infomation
             msg_len = recv(tcp_conn_fd, recv_buff, 1, 0);
             if (msg_len > 0)
             {
                 int method = recv_buff[0];
                 switch (method)
                 {
-                case 1: // Request peer TCP tuple -> Reply
+                case 1: // Request peer TCP tuple -> Reply TCP tuple
                     send_type2_method2(tcp_conn_fd, tcp_status, is_server);
                     break;
                 case 2: // Reply TCP tuple -> Parse
@@ -132,15 +152,15 @@ int read_packet(int tcp_conn_fd, tcp_status_t *tcp_status, const bool is_server)
                             tcp_status->tcp_tuple_info.s_client_ip = ntohl(*(uint32_t *)(recv_buff + 6)); // Client IP
                             tcp_status->tcp_tuple_info.s_client_port = ntohs(*(uint16_t *)(recv_buff + 10)); // Client port
                         }
-                        ret_value = 1;
+                        ret_value = OP_S;
                     }
                     break;
                 }
             }
-            state = -1;
+            state = RS_END;
             break;
         default:
-            state = -1;
+            state = RS_END;
             break;
         }
     }

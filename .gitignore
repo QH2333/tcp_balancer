@@ -1,3 +1,4 @@
 .vscode
 socket_client
 socket_server
+server.log
